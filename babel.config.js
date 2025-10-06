@@ -3,7 +3,7 @@ module.exports = function(api) {
   return {
     presets: ['babel-preset-expo'],
     plugins: [
-      // Esta linha é essencial para a navegação de gaveta funcionar.
+      // A linha abaixo DEVE SER A ÚLTIMA na lista de plugins.
       'react-native-reanimated/plugin',
     ],
   };
