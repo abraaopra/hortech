@@ -1,7 +1,7 @@
 import "react-native-url-polyfill/auto";
 import "react-native-get-random-values";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, createContext, useContext } from "react";
 import {
   Text,
   SafeAreaView,
@@ -27,10 +27,74 @@ import {
   DrawerContentScrollView,
   DrawerItemList,
 } from "@react-navigation/drawer";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { supabase } from "./supabaseClient";
 
 const Stack = createNativeStackNavigator();
 const Drawer = createDrawerNavigator();
+
+// =================================================================
+// 🚀 CONTEXTO DE TEMA 🚀
+// =================================================================
+
+const ThemeContext = createContext();
+
+export const useTheme = () => {
+  const context = useContext(ThemeContext);
+  if (!context) {
+    throw new Error("useTheme must be used within ThemeProvider");
+  }
+  return context;
+};
+
+const ThemeProvider = ({ children }) => {
+  const [isDarkMode, setIsDarkMode] = useState(false);
+
+  useEffect(() => {
+    // Carregar preferência salva
+    const loadTheme = async () => {
+      try {
+        const savedTheme = await AsyncStorage.getItem("theme");
+        if (savedTheme !== null) {
+          setIsDarkMode(savedTheme === "dark");
+        }
+      } catch (error) {
+        console.log("Erro ao carregar tema:", error);
+      }
+    };
+    loadTheme();
+  }, []);
+
+  const toggleTheme = async () => {
+    const newTheme = !isDarkMode;
+    setIsDarkMode(newTheme);
+    try {
+      await AsyncStorage.setItem("theme", newTheme ? "dark" : "light");
+    } catch (error) {
+      console.log("Erro ao salvar tema:", error);
+    }
+  };
+
+  const theme = {
+    isDarkMode,
+    toggleTheme,
+    colors: {
+      background: isDarkMode ? "#121212" : "#F5F5F5",
+      surface: isDarkMode ? "#1E1E1E" : "#FFFFFF",
+      text: isDarkMode ? "#FFFFFF" : "#333333",
+      textSecondary: isDarkMode ? "#B0B0B0" : "#666666",
+      border: isDarkMode ? "#333333" : "#DDDDDD",
+      primary: "#388E3C",
+      primaryLight: "#4CAF50",
+      error: "#E53935",
+      card: isDarkMode ? "#2A2A2A" : "#FFFFFF",
+    },
+  };
+
+  return (
+    <ThemeContext.Provider value={theme}>{children}</ThemeContext.Provider>
+  );
+};
 
 // =================================================================
 // 🚀 INÍCIO DOS COMPONENTES DE NAVEGAÇÃO 🚀
@@ -42,26 +106,27 @@ const AppHeader = ({
   showBackButton = false,
   isDrawer = false,
 }) => {
+  const theme = useTheme();
   return (
-    <View style={styles.header}>
+    <View style={[styles.header, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }]}>
       <View style={styles.headerSide}>
         {showBackButton ? (
           <IconButton
             icon="arrow-left"
-            iconColor="#388E3C"
+            iconColor={theme.colors.primary}
             size={28}
             onPress={() => navigation.goBack()}
           />
         ) : isDrawer ? (
           <IconButton
             icon="menu"
-            iconColor="#388E3C"
+            iconColor={theme.colors.primary}
             size={28}
             onPress={() => navigation.openDrawer()}
           />
         ) : null}
       </View>
-      <Text style={styles.headerTitle} numberOfLines={1}>
+      <Text style={[styles.headerTitle, { color: theme.colors.primary }]} numberOfLines={1}>
         {title}
       </Text>
       <View style={styles.headerSide} />
@@ -70,6 +135,7 @@ const AppHeader = ({
 };
 
 const CustomDrawerContent = (props) => {
+  const theme = useTheme();
   const [userEmail, setUserEmail] = useState("");
   const [avatarUrl, setAvatarUrl] = useState(null);
 
@@ -106,24 +172,40 @@ const CustomDrawerContent = (props) => {
   }, []);
 
   return (
-    <DrawerContentScrollView {...props}>
-      <View style={styles.drawerHeader}>
+    <DrawerContentScrollView 
+      {...props}
+      style={{ backgroundColor: theme.colors.surface }}
+    >
+      <View style={[styles.drawerHeader, { borderBottomColor: theme.colors.border }]}>
         {avatarUrl ? (
           <Avatar.Image size={64} source={{ uri: avatarUrl }} />
         ) : (
           <Avatar.Icon
             size={64}
             icon="account-circle"
-            style={{ backgroundColor: "#ccc" }}
+            style={{ backgroundColor: theme.colors.border }}
           />
         )}
-        <Text style={styles.drawerEmail} numberOfLines={1}>
+        <Text style={[styles.drawerEmail, { color: theme.colors.text }]} numberOfLines={1}>
           {userEmail}
         </Text>
       </View>
       <DrawerItemList {...props} />
       <TouchableOpacity
-        style={styles.drawerSignOutButton}
+        style={[styles.drawerThemeButton, { borderTopColor: theme.colors.border }]}
+        onPress={theme.toggleTheme}
+      >
+        <IconButton
+          icon={theme.isDarkMode ? "weather-sunny" : "weather-night"}
+          iconColor={theme.colors.primary}
+          size={24}
+        />
+        <Text style={[styles.drawerThemeText, { color: theme.colors.text }]}>
+          {theme.isDarkMode ? "Modo Claro" : "Modo Escuro"}
+        </Text>
+      </TouchableOpacity>
+      <TouchableOpacity
+        style={[styles.drawerSignOutButton, { borderTopColor: theme.colors.border }]}
         onPress={() => supabase.auth.signOut()}
       >
         <Text style={styles.drawerSignOutText}>Sair da Conta</Text>
@@ -137,6 +219,7 @@ const CustomDrawerContent = (props) => {
 // =================================================================
 
 const AuthScreen = ({ navigation }) => {
+  const theme = useTheme();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -152,22 +235,24 @@ const AuthScreen = ({ navigation }) => {
   }
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Hortech App</Text>
+    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <Text style={[styles.title, { color: theme.colors.primary }]}>Hortech App</Text>
       <TextInput
-        style={styles.authInput}
+        style={[styles.authInput, { backgroundColor: theme.colors.surface, color: theme.colors.text, borderColor: theme.colors.border }]}
         onChangeText={setEmail}
         value={email}
         placeholder="email@endereco.com"
+        placeholderTextColor={theme.colors.textSecondary}
         autoCapitalize="none"
         keyboardType="email-address"
       />
       <TextInput
-        style={styles.authInput}
+        style={[styles.authInput, { backgroundColor: theme.colors.surface, color: theme.colors.text, borderColor: theme.colors.border }]}
         onChangeText={setPassword}
         value={password}
         secureTextEntry
         placeholder="Senha"
+        placeholderTextColor={theme.colors.textSecondary}
         autoCapitalize="none"
       />
       <TouchableOpacity
@@ -189,6 +274,7 @@ const AuthScreen = ({ navigation }) => {
 };
 
 const SignUpScreen = ({ navigation }) => {
+  const theme = useTheme();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -210,36 +296,38 @@ const SignUpScreen = ({ navigation }) => {
   }
 
   return (
-    <SafeAreaView style={styles.containerFull}>
+    <SafeAreaView style={[styles.containerFull, { backgroundColor: theme.colors.background }]}>
       <AppHeader
         title="Criar Conta"
         navigation={navigation}
         showBackButton={true}
       />
-      <View style={styles.container}>
-        <Text style={styles.subtitle}>
+      <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+        <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>
           Preencha os dados para criar sua conta
         </Text>
         <TextInput
-          style={styles.authInput}
+          style={[styles.authInput, { backgroundColor: theme.colors.surface, color: theme.colors.text, borderColor: theme.colors.border }]}
           onChangeText={setEmail}
           value={email}
           placeholder="email@endereco.com"
+          placeholderTextColor={theme.colors.textSecondary}
           autoCapitalize="none"
           keyboardType="email-address"
         />
         <TextInput
-          style={styles.authInput}
+          style={[styles.authInput, { backgroundColor: theme.colors.surface, color: theme.colors.text, borderColor: theme.colors.border }]}
           onChangeText={setPassword}
           value={password}
           secureTextEntry
           placeholder="Senha"
+          placeholderTextColor={theme.colors.textSecondary}
           autoCapitalize="none"
         />
         <TouchableOpacity
           style={[styles.button, styles.signUpButton]}
           disabled={loading}
-          onPress={signUpWithEmail}
+          onPress={signUpWithEmail} 
         >
           {loading ? (
             <ActivityIndicator color="white" />
@@ -253,6 +341,7 @@ const SignUpScreen = ({ navigation }) => {
 };
 
 const AccountScreen = ({ navigation }) => {
+  const theme = useTheme();
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
@@ -352,20 +441,20 @@ const AccountScreen = ({ navigation }) => {
 
   if (loading)
     return (
-      <SafeAreaView style={styles.containerFull}>
+      <SafeAreaView style={[styles.containerFull, { backgroundColor: theme.colors.background }]}>
         <AppHeader
           title="Minha Conta"
           navigation={navigation}
           showBackButton={true}
         />
-        <View style={styles.container}>
+        <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
           <ActivityIndicator />
         </View>
       </SafeAreaView>
     );
 
   return (
-    <SafeAreaView style={styles.containerFull}>
+    <SafeAreaView style={[styles.containerFull, { backgroundColor: theme.colors.background }]}>
       <AppHeader
         title="Minha Conta"
         navigation={navigation}
@@ -383,7 +472,7 @@ const AccountScreen = ({ navigation }) => {
             <Avatar.Icon
               size={100}
               icon="account-circle"
-              style={styles.accountAvatar}
+              style={[styles.accountAvatar, { backgroundColor: theme.colors.border }]}
             />
           )}
           {uploading && (
@@ -392,14 +481,15 @@ const AccountScreen = ({ navigation }) => {
             </View>
           )}
         </TouchableOpacity>
-        <Text style={styles.accountLabel}>E-mail da Conta</Text>
-        <Text style={styles.accountEmail}>{user ? user.email : ""}</Text>
+        <Text style={[styles.accountLabel, { color: theme.colors.textSecondary }]}>E-mail da Conta</Text>
+        <Text style={[styles.accountEmail, { color: theme.colors.text }]}>{user ? user.email : ""}</Text>
       </View>
     </SafeAreaView>
   );
 };
 
 const GardenListScreen = ({ navigation }) => {
+  const theme = useTheme();
   const [gardens, setGardens] = useState([]);
   const [newGardenName, setNewGardenName] = useState("");
   const [loading, setLoading] = useState(true);
@@ -477,7 +567,7 @@ const GardenListScreen = ({ navigation }) => {
   };
 
   return (
-    <SafeAreaView style={styles.containerFull}>
+    <SafeAreaView style={[styles.containerFull, { backgroundColor: theme.colors.background }]}>
       <AppHeader
         title="Minhas Hortas"
         navigation={navigation}
@@ -485,8 +575,9 @@ const GardenListScreen = ({ navigation }) => {
       />
       <View style={styles.inputContainer}>
         <TextInput
-          style={styles.input}
+          style={[styles.input, { backgroundColor: theme.colors.surface, color: theme.colors.text, borderColor: theme.colors.border }]}
           placeholder="Nome da nova horta"
+          placeholderTextColor={theme.colors.textSecondary}
           value={newGardenName}
           onChangeText={setNewGardenName}
         />
@@ -505,7 +596,7 @@ const GardenListScreen = ({ navigation }) => {
           keyExtractor={(item) => item.id.toString()}
           renderItem={({ item }) => (
             <TouchableOpacity
-              style={styles.gardenItem}
+              style={[styles.gardenItem, { backgroundColor: theme.colors.surface }]}
               onPress={() =>
                 navigation.navigate("Garden", {
                   gardenId: item.id,
@@ -513,7 +604,7 @@ const GardenListScreen = ({ navigation }) => {
                 })
               }
             >
-              <Text style={styles.gardenName}>{item.name}</Text>
+              <Text style={[styles.gardenName, { color: theme.colors.text }]}>{item.name}</Text>
               <IconButton
                 icon="delete-outline"
                 size={24}
@@ -523,7 +614,7 @@ const GardenListScreen = ({ navigation }) => {
             </TouchableOpacity>
           )}
           ListEmptyComponent={
-            <Text style={styles.emptyText}>
+            <Text style={[styles.emptyText, { color: theme.colors.textSecondary }]}>
               Você ainda não tem hortas. Crie uma acima!
             </Text>
           }
@@ -534,6 +625,7 @@ const GardenListScreen = ({ navigation }) => {
 };
 
 const GardenScreen = ({ route, navigation }) => {
+  const theme = useTheme();
   const { gardenId, gardenName } = route.params;
   const [plants, setPlants] = useState([]);
   const [catalog, setCatalog] = useState([]);
@@ -803,40 +895,40 @@ const GardenScreen = ({ route, navigation }) => {
     }
   };
   const PlantDetailScreen = ({ plant, onClose }) => (
-    <View style={styles.pageContainer}>
-      <View style={styles.catalogHeader}>
-        <Text style={styles.pageTitle} numberOfLines={1}>
+    <View style={[styles.pageContainer, { backgroundColor: theme.colors.background }]}>
+      <View style={[styles.catalogHeader, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }]}>
+        <Text style={[styles.pageTitle, { color: theme.colors.primary }]} numberOfLines={1}>
           {plant.name}
         </Text>
         <Button title="Voltar" onPress={onClose} color="#388E3C" />
       </View>
       <ScrollView>
-        <Card style={styles.detailCard}>
+        <Card style={[styles.detailCard, { backgroundColor: theme.colors.card }]}>
           <Image source={{ uri: plant.image }} style={styles.detailImage} />
           <Card.Content style={styles.detailContent}>
-            <Text style={styles.catalogScientificName}>
+            <Text style={[styles.catalogScientificName, { color: theme.colors.textSecondary }]}>
               {plant.scientific_name}
             </Text>
-            <Text style={styles.catalogDescription}>{plant.description}</Text>
+            <Text style={[styles.catalogDescription, { color: theme.colors.text }]}>{plant.description}</Text>
           </Card.Content>
-          <View style={styles.detailInfoContainer}>
+          <View style={[styles.detailInfoContainer, { borderColor: theme.colors.border }]}>
             <View style={styles.infoItem}>
               <Text style={styles.infoIcon}>🕒</Text>
-              <Text style={styles.infoLabel}>Colheita em</Text>
-              <Text style={styles.infoValue}>{plant.harvest_time}</Text>
+              <Text style={[styles.infoLabel, { color: theme.colors.textSecondary }]}>Colheita em</Text>
+              <Text style={[styles.infoValue, { color: theme.colors.text }]}>{plant.harvest_time}</Text>
             </View>
             <View style={styles.infoItem}>
               <Text style={styles.infoIcon}>🗓️</Text>
-              <Text style={styles.infoLabel}>Plantar na</Text>
-              <Text style={styles.infoValue}>{plant.planting_season}</Text>
+              <Text style={[styles.infoLabel, { color: theme.colors.textSecondary }]}>Plantar na</Text>
+              <Text style={[styles.infoValue, { color: theme.colors.text }]}>{plant.planting_season}</Text>
             </View>
           </View>
           <Card.Content style={styles.detailTipsSection}>
-            <Text style={styles.tipTitle}>Dicas de Cultivo</Text>
+            <Text style={[styles.tipTitle, { color: theme.colors.primary }]}>Dicas de Cultivo</Text>
             {plant.tips.map((tip, index) => (
               <View key={index} style={styles.tipListItem}>
-                <Text style={styles.tipBullet}>•</Text>
-                <Text style={styles.tipContent}>{tip}</Text>
+                <Text style={[styles.tipBullet, { color: theme.colors.primary }]}>•</Text>
+                <Text style={[styles.tipContent, { color: theme.colors.text }]}>{tip}</Text>
               </View>
             ))}
           </Card.Content>
@@ -845,23 +937,23 @@ const GardenScreen = ({ route, navigation }) => {
     </View>
   );
   const PestsScreen = ({ pests, onClose }) => (
-    <View style={styles.pageContainer}>
-      <View style={styles.catalogHeader}>
-        <Text style={styles.pageTitle}>Pragas Comuns</Text>
+    <View style={[styles.pageContainer, { backgroundColor: theme.colors.background }]}>
+      <View style={[styles.catalogHeader, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }]}>
+        <Text style={[styles.pageTitle, { color: theme.colors.primary }]}>Pragas Comuns</Text>
         <Button title="Voltar" onPress={onClose} color="#388E3C" />
       </View>
       <FlatList
         data={pests}
         keyExtractor={(item) => item.id.toString()}
         renderItem={({ item }) => (
-          <Card style={styles.pestCard}>
+          <Card style={[styles.pestCard, { backgroundColor: theme.colors.card }]}>
             <Image source={{ uri: item.image }} style={styles.pestImage} />
             <Card.Content style={{ paddingTop: 12 }}>
               <Text style={styles.pestName}>{item.name}</Text>
-              <Text style={styles.pestDescription}>{item.description}</Text>
-              <Text style={styles.pestSectionTitle}>Sintomas:</Text>
-              <Text style={styles.pestContent}>{item.symptoms}</Text>
-              <Text style={styles.pestSectionTitle}>Solução Orgânica:</Text>
+              <Text style={[styles.pestDescription, { color: theme.colors.text }]}>{item.description}</Text>
+              <Text style={[styles.pestSectionTitle, { color: theme.colors.text }]}>Sintomas:</Text>
+              <Text style={[styles.pestContent, { color: theme.colors.text }]}>{item.symptoms}</Text>
+              <Text style={[styles.pestSectionTitle, { color: theme.colors.text }]}>Solução Orgânica:</Text>
               <Text style={styles.pestSolutionText}>{item.solution}</Text>
             </Card.Content>
           </Card>
@@ -870,9 +962,9 @@ const GardenScreen = ({ route, navigation }) => {
     </View>
   );
   const CatalogScreen = ({ catalog, onClose, onSelectPlant }) => (
-    <View style={styles.pageContainer}>
-      <View style={styles.catalogHeader}>
-        <Text style={styles.pageTitle}>Catálogo de Plantas</Text>
+    <View style={[styles.pageContainer, { backgroundColor: theme.colors.background }]}>
+      <View style={[styles.catalogHeader, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }]}>
+        <Text style={[styles.pageTitle, { color: theme.colors.primary }]}>Catálogo de Plantas</Text>
         <Button title="Voltar" onPress={onClose} color="#388E3C" />
       </View>
       <FlatList
@@ -880,11 +972,11 @@ const GardenScreen = ({ route, navigation }) => {
         keyExtractor={(item) => item.id.toString()}
         renderItem={({ item }) => (
           <TouchableOpacity onPress={() => onSelectPlant(item)}>
-            <Card style={styles.catalogCard}>
+            <Card style={[styles.catalogCard, { backgroundColor: theme.colors.card }]}>
               <Image source={{ uri: item.image }} style={styles.catalogImage} />
               <Card.Content style={styles.catalogContent}>
                 <Text style={styles.catalogPlantName}>{item.name}</Text>
-                <Text style={styles.catalogDescription} numberOfLines={2}>
+                <Text style={[styles.catalogDescription, { color: theme.colors.text }]} numberOfLines={2}>
                   {item.description}
                 </Text>
               </Card.Content>
@@ -916,7 +1008,7 @@ const GardenScreen = ({ route, navigation }) => {
     );
 
   return (
-    <SafeAreaView style={styles.containerFull}>
+    <SafeAreaView style={[styles.containerFull, { backgroundColor: theme.colors.background }]}>
       <AppHeader
         title={gardenName}
         navigation={navigation}
@@ -925,16 +1017,16 @@ const GardenScreen = ({ route, navigation }) => {
       <FlatList
         ListHeaderComponent={
           <>
-            <Text style={styles.sectionTitle}>Ferramentas Rápidas</Text>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Ferramentas Rápidas</Text>
             <View style={styles.featuresGrid}>
               <TouchableOpacity
-                style={styles.featureButton}
+                style={[styles.featureButton, { backgroundColor: theme.colors.surface }]}
                 onPress={() => setIsCatalogVisible(true)}
               >
                 <Text style={styles.featureText}>Catálogo</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={styles.featureButton}
+                style={[styles.featureButton, { backgroundColor: theme.colors.surface }]}
                 onPress={() => setIsPestsVisible(true)}
               >
                 <Text style={styles.featureText}>Pragas</Text>
@@ -942,6 +1034,7 @@ const GardenScreen = ({ route, navigation }) => {
               <TouchableOpacity
                 style={[
                   styles.featureButton,
+                  { backgroundColor: theme.colors.surface },
                   irrigationStatus === "on" && styles.irrigationButtonOn,
                 ]}
                 onPress={handleToggleIrrigation}
@@ -956,14 +1049,14 @@ const GardenScreen = ({ route, navigation }) => {
                 </Text>
               </TouchableOpacity>
             </View>
-            <Text style={styles.sectionTitle}>Plantas na Horta</Text>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Plantas na Horta</Text>
           </>
         }
         contentContainerStyle={styles.plantListContainer}
         data={plants}
         keyExtractor={(item) => item.id.toString()}
         renderItem={({ item }) => (
-          <Card style={styles.plantListItemCard}>
+          <Card style={[styles.plantListItemCard, { backgroundColor: theme.colors.card }]}>
             <View style={styles.plantListItemContent}>
               <TouchableOpacity
                 style={styles.plantListItemTouchable}
@@ -975,8 +1068,8 @@ const GardenScreen = ({ route, navigation }) => {
                   source={{ uri: item.image || item.catalog_image }}
                 />
                 <View style={styles.plantListItemInfo}>
-                  <Text style={styles.plantListItemName}>{item.name}</Text>
-                  <Text style={styles.plantListItemDate}>
+                  <Text style={[styles.plantListItemName, { color: theme.colors.text }]}>{item.name}</Text>
+                  <Text style={[styles.plantListItemDate, { color: theme.colors.textSecondary }]}>
                     Plantado em: {item.date}
                   </Text>
                 </View>
@@ -992,7 +1085,7 @@ const GardenScreen = ({ route, navigation }) => {
         )}
         ListEmptyComponent={
           <View style={styles.emptyListContainer}>
-            <Text style={styles.emptyListText}>
+            <Text style={[styles.emptyListText, { color: theme.colors.textSecondary }]}>
               Sua horta ainda está vazia.
             </Text>
           </View>
@@ -1010,8 +1103,8 @@ const GardenScreen = ({ route, navigation }) => {
         onRequestClose={handleCloseModal}
       >
         <View style={styles.modalContainer}>
-          <View style={styles.modalView}>
-            <Text style={styles.modalTitle}>
+          <View style={[styles.modalView, { backgroundColor: theme.colors.surface }]}>
+            <Text style={[styles.modalTitle, { color: theme.colors.text }]}>
               {isEditingPlant ? "Editar Planta" : "Adicionar Nova Planta"}
             </Text>
             <TouchableOpacity onPress={handleChooseFromGallery}>
@@ -1047,21 +1140,22 @@ const GardenScreen = ({ route, navigation }) => {
               />
             </View>
             <TouchableOpacity
-              style={styles.pickerTrigger}
+              style={[styles.pickerTrigger, { borderColor: theme.colors.border }]}
               onPress={() => setPlantPickerVisible(true)}
             >
               <Text
-                style={[styles.modalInputText, !plantName && { color: "#aaa" }]}
+                style={[styles.modalInputText, { color: plantName ? theme.colors.text : theme.colors.textSecondary }]}
               >
                 {plantName || "Selecione uma planta..."}
               </Text>
             </TouchableOpacity>
             <MaskInput
-              style={styles.modalInput}
+              style={[styles.modalInput, { backgroundColor: theme.colors.surface, color: theme.colors.text, borderColor: theme.colors.border }]}
               value={plantDate}
               onChangeText={setPlantDate}
               mask={[/\d/, /\d/, "/", /\d/, /\d/, "/", /\d/, /\d/, /\d/, /\d/]}
               placeholder="Data de Plantio (DD/MM/AAAA)"
+              placeholderTextColor={theme.colors.textSecondary}
               keyboardType="numeric"
             />
             <View style={styles.modalButtonContainer}>
@@ -1090,19 +1184,19 @@ const GardenScreen = ({ route, navigation }) => {
           style={styles.pickerBackdrop}
           onPress={() => setPlantPickerVisible(false)}
         >
-          <View style={styles.pickerContainer}>
+          <View style={[styles.pickerContainer, { backgroundColor: theme.colors.surface }]}>
             <FlatList
               data={catalog}
               keyExtractor={(item) => item.id.toString()}
               renderItem={({ item }) => (
                 <TouchableOpacity
-                  style={styles.pickerItem}
+                  style={[styles.pickerItem, { borderBottomColor: theme.colors.border }]}
                   onPress={() => {
                     setPlantName(item.name);
                     setPlantPickerVisible(false);
                   }}
                 >
-                  <Text style={styles.pickerItemText}>{item.name}</Text>
+                  <Text style={[styles.pickerItemText, { color: theme.colors.text }]}>{item.name}</Text>
                 </TouchableOpacity>
               )}
             />
@@ -1174,9 +1268,11 @@ export default function App() {
     };
   }, []);
   return (
-    <NavigationContainer>
-      {session && session.user ? <RootNavigator /> : <AuthStackNavigator />}
-    </NavigationContainer>
+    <ThemeProvider>
+      <NavigationContainer>
+        {session && session.user ? <RootNavigator /> : <AuthStackNavigator />}
+      </NavigationContainer>
+    </ThemeProvider>
   );
 }
 
@@ -1605,6 +1701,20 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "500",
     color: "#333",
+  },
+  drawerThemeButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 20,
+    paddingVertical: 15,
+    borderTopWidth: 1,
+    borderTopColor: "#eee",
+    marginTop: 10,
+  },
+  drawerThemeText: {
+    fontSize: 16,
+    fontWeight: "500",
+    marginLeft: 10,
   },
   drawerSignOutButton: {
     paddingHorizontal: 20,
