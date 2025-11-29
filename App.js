@@ -32,12 +32,31 @@ import { supabase } from "./supabaseClient";
 
 const Stack = createNativeStackNavigator();
 const Drawer = createDrawerNavigator();
-
-// =================================================================
-// 🚀 CONTEXTO DE TEMA 🚀
-// =================================================================
-
 const ThemeContext = createContext();
+
+// =================================================================
+// 🖼️ COMPONENTE DE IMAGEM COM FUNDO PARA PNG 🖼️
+// =================================================================
+
+const ImageWithBackground = ({ source, style, resizeMode, ...props }) => {
+  const uri = source?.uri || (typeof source === 'string' ? source : null);
+  const isPng = uri && (uri.toLowerCase().endsWith('.png') || uri.toLowerCase().includes('.png?'));
+  
+  if (isPng) {
+    return (
+      <View style={[style, { backgroundColor: '#FFFFFF', overflow: 'hidden' }]}>
+        <Image 
+          source={source} 
+          style={StyleSheet.absoluteFill} 
+          resizeMode={resizeMode || "cover"} 
+          {...props} 
+        />
+      </View>
+    );
+  }
+  
+  return <Image source={source} style={style} resizeMode={resizeMode} {...props} />;
+};
 
 export const useTheme = () => {
   const context = useContext(ThemeContext);
@@ -215,6 +234,69 @@ const CustomDrawerContent = (props) => {
 };
 
 // =================================================================
+// ✅ FUNÇÕES DE VALIDAÇÃO ✅
+// =================================================================
+
+const validateEmail = (email) => {
+  if (!email || email.trim() === "") {
+    return "E-mail é obrigatório";
+  }
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(email)) {
+    return "E-mail inválido";
+  }
+  return null;
+};
+
+const validatePassword = (password) => {
+  if (!password || password.trim() === "") {
+    return "Senha é obrigatória";
+  }
+  if (password.length < 6) {
+    return "Senha deve ter pelo menos 6 caracteres";
+  }
+  return null;
+};
+
+const validateDate = (date) => {
+  if (!date || date.trim() === "") {
+    return "Data é obrigatória";
+  }
+  // Validar formato DD/MM/AAAA
+  const dateRegex = /^(\d{2})\/(\d{2})\/(\d{4})$/;
+  if (!dateRegex.test(date)) {
+    return "Data inválida. Use o formato DD/MM/AAAA";
+  }
+  const [, day, month, year] = date.match(dateRegex);
+  const dayNum = parseInt(day, 10);
+  const monthNum = parseInt(month, 10);
+  const yearNum = parseInt(year, 10);
+  
+  // Validar valores
+  if (monthNum < 1 || monthNum > 12) {
+    return "Mês inválido (deve ser entre 01 e 12)";
+  }
+  if (dayNum < 1 || dayNum > 31) {
+    return "Dia inválido (deve ser entre 01 e 31)";
+  }
+  if (yearNum < 1900 || yearNum > 2100) {
+    return "Ano inválido";
+  }
+  
+  // Validar se a data existe (ex: 31/02 não existe)
+  const dateObj = new Date(yearNum, monthNum - 1, dayNum);
+  if (
+    dateObj.getDate() !== dayNum ||
+    dateObj.getMonth() !== monthNum - 1 ||
+    dateObj.getFullYear() !== yearNum
+  ) {
+    return "Data inválida (esta data não existe)";
+  }
+  
+  return null;
+};
+
+// =================================================================
 // 🚀 INÍCIO DOS COMPONENTES DE TELA 🚀
 // =================================================================
 
@@ -223,8 +305,39 @@ const AuthScreen = ({ navigation }) => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [emailError, setEmailError] = useState("");
+  const [passwordError, setPasswordError] = useState("");
+
+  const handleEmailChange = (text) => {
+    setEmail(text);
+    if (emailError) {
+      setEmailError("");
+    }
+  };
+
+  const handlePasswordChange = (text) => {
+    setPassword(text);
+    if (passwordError) {
+      setPasswordError("");
+    }
+  };
 
   async function signInWithEmail() {
+    // Validar campos
+    const emailValidation = validateEmail(email);
+    const passwordValidation = validatePassword(password);
+
+    if (emailValidation) {
+      setEmailError(emailValidation);
+    }
+    if (passwordValidation) {
+      setPasswordError(passwordValidation);
+    }
+
+    if (emailValidation || passwordValidation) {
+      return;
+    }
+
     setLoading(true);
     const { error } = await supabase.auth.signInWithPassword({
       email,
@@ -238,29 +351,57 @@ const AuthScreen = ({ navigation }) => {
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <Text style={[styles.title, { color: theme.colors.primary }]}>Hortech App</Text>
       <TextInput
-        style={[styles.authInput, { backgroundColor: theme.colors.surface, color: theme.colors.text, borderColor: theme.colors.border }]}
-        onChangeText={setEmail}
+        style={[
+          styles.authInput,
+          {
+            backgroundColor: theme.colors.surface,
+            color: theme.colors.text,
+            borderColor: emailError ? theme.colors.error : theme.colors.border,
+          },
+        ]}
+        onChangeText={handleEmailChange}
         value={email}
         placeholder="email@endereco.com"
         placeholderTextColor={theme.colors.textSecondary}
         autoCapitalize="none"
         keyboardType="email-address"
       />
+      {emailError ? (
+        <Text style={[styles.errorText, { color: theme.colors.error }]}>
+          {emailError}
+        </Text>
+      ) : null}
       <TextInput
-        style={[styles.authInput, { backgroundColor: theme.colors.surface, color: theme.colors.text, borderColor: theme.colors.border }]}
-        onChangeText={setPassword}
+        style={[
+          styles.authInput,
+          {
+            backgroundColor: theme.colors.surface,
+            color: theme.colors.text,
+            borderColor: passwordError ? theme.colors.error : theme.colors.border,
+          },
+        ]}
+        onChangeText={handlePasswordChange}
         value={password}
         secureTextEntry
         placeholder="Senha"
         placeholderTextColor={theme.colors.textSecondary}
         autoCapitalize="none"
       />
+      {passwordError ? (
+        <Text style={[styles.errorText, { color: theme.colors.error }]}>
+          {passwordError}
+        </Text>
+      ) : null}
       <TouchableOpacity
         style={[styles.button, styles.signInButton]}
         disabled={loading}
         onPress={signInWithEmail}
       >
-        <Text style={styles.buttonText}>Entrar</Text>
+        {loading ? (
+          <ActivityIndicator color="white" />
+        ) : (
+          <Text style={styles.buttonText}>Entrar</Text>
+        )}
       </TouchableOpacity>
       <TouchableOpacity
         style={[styles.button, styles.signUpButton]}
@@ -278,8 +419,39 @@ const SignUpScreen = ({ navigation }) => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [emailError, setEmailError] = useState("");
+  const [passwordError, setPasswordError] = useState("");
+
+  const handleEmailChange = (text) => {
+    setEmail(text);
+    if (emailError) {
+      setEmailError("");
+    }
+  };
+
+  const handlePasswordChange = (text) => {
+    setPassword(text);
+    if (passwordError) {
+      setPasswordError("");
+    }
+  };
 
   async function signUpWithEmail() {
+    // Validar campos
+    const emailValidation = validateEmail(email);
+    const passwordValidation = validatePassword(password);
+
+    if (emailValidation) {
+      setEmailError(emailValidation);
+    }
+    if (passwordValidation) {
+      setPasswordError(passwordValidation);
+    }
+
+    if (emailValidation || passwordValidation) {
+      return;
+    }
+
     setLoading(true);
     const { data, error } = await supabase.auth.signUp({ email, password });
     if (error) {
@@ -307,23 +479,47 @@ const SignUpScreen = ({ navigation }) => {
           Preencha os dados para criar sua conta
         </Text>
         <TextInput
-          style={[styles.authInput, { backgroundColor: theme.colors.surface, color: theme.colors.text, borderColor: theme.colors.border }]}
-          onChangeText={setEmail}
+          style={[
+            styles.authInput,
+            {
+              backgroundColor: theme.colors.surface,
+              color: theme.colors.text,
+              borderColor: emailError ? theme.colors.error : theme.colors.border,
+            },
+          ]}
+          onChangeText={handleEmailChange}
           value={email}
           placeholder="email@endereco.com"
           placeholderTextColor={theme.colors.textSecondary}
           autoCapitalize="none"
           keyboardType="email-address"
         />
+        {emailError ? (
+          <Text style={[styles.errorText, { color: theme.colors.error }]}>
+            {emailError}
+          </Text>
+        ) : null}
         <TextInput
-          style={[styles.authInput, { backgroundColor: theme.colors.surface, color: theme.colors.text, borderColor: theme.colors.border }]}
-          onChangeText={setPassword}
+          style={[
+            styles.authInput,
+            {
+              backgroundColor: theme.colors.surface,
+              color: theme.colors.text,
+              borderColor: passwordError ? theme.colors.error : theme.colors.border,
+            },
+          ]}
+          onChangeText={handlePasswordChange}
           value={password}
           secureTextEntry
-          placeholder="Senha"
+          placeholder="Senha (mínimo 6 caracteres)"
           placeholderTextColor={theme.colors.textSecondary}
           autoCapitalize="none"
         />
+        {passwordError ? (
+          <Text style={[styles.errorText, { color: theme.colors.error }]}>
+            {passwordError}
+          </Text>
+        ) : null}
         <TouchableOpacity
           style={[styles.button, styles.signUpButton]}
           disabled={loading}
@@ -642,6 +838,8 @@ const GardenScreen = ({ route, navigation }) => {
   const [isPlantPickerVisible, setPlantPickerVisible] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [irrigationStatus, setIrrigationStatus] = useState("off");
+  const [dateError, setDateError] = useState("");
+  const [plantNameError, setPlantNameError] = useState("");
 
   useEffect(() => {
     async function fetchInitialData() {
@@ -736,6 +934,8 @@ const GardenScreen = ({ route, navigation }) => {
     setPlantImageURI(null);
     setIsEditingPlant(false);
     setEditingPlant(null);
+    setDateError("");
+    setPlantNameError("");
   };
 
   const handleOpenAddPlant = () => {
@@ -752,17 +952,38 @@ const GardenScreen = ({ route, navigation }) => {
     setModalVisible(true);
   };
 
+  const handleDateChange = (text) => {
+    setPlantDate(text);
+    if (dateError) {
+      setDateError("");
+    }
+  };
+
+  const handlePlantNameSelect = (name) => {
+    setPlantName(name);
+    if (plantNameError) {
+      setPlantNameError("");
+    }
+  };
+
   const handleCloseModal = () => {
     setModalVisible(false);
     resetPlantForm();
   };
 
   const handleSavePlant = async () => {
-    if (!plantName || !plantDate) {
-      Alert.alert(
-        "Campos Incompletos",
-        "Selecione uma planta e preencha a data.",
-      );
+    // Validar campos
+    const nameValidation = !plantName || plantName.trim() === "" ? "Selecione uma planta" : null;
+    const dateValidation = validateDate(plantDate);
+
+    if (nameValidation) {
+      setPlantNameError(nameValidation);
+    }
+    if (dateValidation) {
+      setDateError(dateValidation);
+    }
+
+    if (nameValidation || dateValidation) {
       return;
     }
 
@@ -904,7 +1125,7 @@ const GardenScreen = ({ route, navigation }) => {
       </View>
       <ScrollView>
         <Card style={[styles.detailCard, { backgroundColor: theme.colors.card }]}>
-          <Image source={{ uri: plant.image }} style={styles.detailImage} />
+          <ImageWithBackground source={{ uri: plant.image }} style={styles.detailImage} />
           <Card.Content style={styles.detailContent}>
             <Text style={[styles.catalogScientificName, { color: theme.colors.textSecondary }]}>
               {plant.scientific_name}
@@ -947,7 +1168,7 @@ const GardenScreen = ({ route, navigation }) => {
         keyExtractor={(item) => item.id.toString()}
         renderItem={({ item }) => (
           <Card style={[styles.pestCard, { backgroundColor: theme.colors.card }]}>
-            <Image source={{ uri: item.image }} style={styles.pestImage} />
+            <ImageWithBackground source={{ uri: item.image }} style={styles.pestImage} />
             <Card.Content style={{ paddingTop: 12 }}>
               <Text style={styles.pestName}>{item.name}</Text>
               <Text style={[styles.pestDescription, { color: theme.colors.text }]}>{item.description}</Text>
@@ -973,7 +1194,7 @@ const GardenScreen = ({ route, navigation }) => {
         renderItem={({ item }) => (
           <TouchableOpacity onPress={() => onSelectPlant(item)}>
             <Card style={[styles.catalogCard, { backgroundColor: theme.colors.card }]}>
-              <Image source={{ uri: item.image }} style={styles.catalogImage} />
+              <ImageWithBackground source={{ uri: item.image }} style={styles.catalogImage} />
               <Card.Content style={styles.catalogContent}>
                 <Text style={styles.catalogPlantName}>{item.name}</Text>
                 <Text style={[styles.catalogDescription, { color: theme.colors.text }]} numberOfLines={2}>
@@ -1112,7 +1333,7 @@ const GardenScreen = ({ route, navigation }) => {
               (isEditingPlant &&
                 editingPlant &&
                 (editingPlant.image || editingPlant.catalog_image)) ? (
-                <Image
+                <ImageWithBackground
                   source={{
                     uri:
                       plantImageURI ||
@@ -1140,7 +1361,10 @@ const GardenScreen = ({ route, navigation }) => {
               />
             </View>
             <TouchableOpacity
-              style={[styles.pickerTrigger, { borderColor: theme.colors.border }]}
+              style={[
+                styles.pickerTrigger,
+                { borderColor: plantNameError ? theme.colors.error : theme.colors.border },
+              ]}
               onPress={() => setPlantPickerVisible(true)}
             >
               <Text
@@ -1149,15 +1373,32 @@ const GardenScreen = ({ route, navigation }) => {
                 {plantName || "Selecione uma planta..."}
               </Text>
             </TouchableOpacity>
+            {plantNameError ? (
+              <Text style={[styles.errorText, { color: theme.colors.error }]}>
+                {plantNameError}
+              </Text>
+            ) : null}
             <MaskInput
-              style={[styles.modalInput, { backgroundColor: theme.colors.surface, color: theme.colors.text, borderColor: theme.colors.border }]}
+              style={[
+                styles.modalInput,
+                {
+                  backgroundColor: theme.colors.surface,
+                  color: theme.colors.text,
+                  borderColor: dateError ? theme.colors.error : theme.colors.border,
+                },
+              ]}
               value={plantDate}
-              onChangeText={setPlantDate}
+              onChangeText={handleDateChange}
               mask={[/\d/, /\d/, "/", /\d/, /\d/, "/", /\d/, /\d/, /\d/, /\d/]}
               placeholder="Data de Plantio (DD/MM/AAAA)"
               placeholderTextColor={theme.colors.textSecondary}
               keyboardType="numeric"
             />
+            {dateError ? (
+              <Text style={[styles.errorText, { color: theme.colors.error }]}>
+                {dateError}
+              </Text>
+            ) : null}
             <View style={styles.modalButtonContainer}>
               <Button
                 title="Cancelar"
@@ -1192,7 +1433,7 @@ const GardenScreen = ({ route, navigation }) => {
                 <TouchableOpacity
                   style={[styles.pickerItem, { borderBottomColor: theme.colors.border }]}
                   onPress={() => {
-                    setPlantName(item.name);
+                    handlePlantNameSelect(item.name);
                     setPlantPickerVisible(false);
                   }}
                 >
@@ -1318,6 +1559,12 @@ const styles = StyleSheet.create({
     borderColor: "#ddd",
     marginBottom: 15,
     color: "#000",
+  },
+  errorText: {
+    fontSize: 12,
+    marginTop: -10,
+    marginBottom: 10,
+    marginLeft: 5,
   },
   button: {
     padding: 15,
